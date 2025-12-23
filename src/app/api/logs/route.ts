@@ -8,8 +8,9 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const minutes = parseInt(searchParams.get('minutes') || '30', 10);
+    const uid = searchParams.get('uid') || undefined;
 
-    const webhooks = getWebhooks(minutes);
+    const webhooks = getWebhooks(minutes, uid);
 
     return NextResponse.json({ 
       success: true,

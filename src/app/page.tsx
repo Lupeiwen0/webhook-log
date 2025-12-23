@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface WebhookLog {
   id: number;
+  uid: string;
   method: string;
   url: string;
   headers: string;
@@ -13,16 +14,48 @@ interface WebhookLog {
   created_at: number;
 }
 
+// Generate random UID with 8-14 characters
+function generateUid(): string {
+  const length = Math.floor(Math.random() * 7) + 8; // 8-14
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let uid = '';
+  for (let i = 0; i < length; i++) {
+    uid += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return uid;
+}
+
+// Validate UID: 8-14 characters, alphanumeric only
+function isValidUid(uid: string): boolean {
+  return /^[a-zA-Z0-9]{8,14}$/.test(uid);
+}
+
 export default function Home() {
   const [webhooks, setWebhooks] = useState<WebhookLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeFilter, setTimeFilter] = useState(30);
   const [selectedWebhook, setSelectedWebhook] = useState<WebhookLog | null>(null);
+  const [uid, setUid] = useState('');
+  const [uidInput, setUidInput] = useState('');
+  const [uidError, setUidError] = useState('');
 
-  const fetchWebhooks = async (minutes: number) => {
+  // Load UID from localStorage on mount
+  useEffect(() => {
+    const savedUid = localStorage.getItem('webhook-uid');
+    if (savedUid && isValidUid(savedUid)) {
+      setUid(savedUid);
+      setUidInput(savedUid);
+    }
+  }, []);
+
+  const fetchWebhooks = useCallback(async (minutes: number, currentUid?: string) => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/logs?minutes=${minutes}`);
+      const uidParam = currentUid !== undefined ? currentUid : uid;
+      const url = uidParam 
+        ? `/api/logs?minutes=${minutes}&uid=${uidParam}`
+        : `/api/logs?minutes=${minutes}`;
+      const response = await fetch(url);
       const data = await response.json();
       if (data.success) {
         setWebhooks(data.data);
@@ -32,7 +65,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [uid]);
 
   useEffect(() => {
     fetchWebhooks(timeFilter);
@@ -41,7 +74,40 @@ export default function Home() {
     }, 5000); // Refresh every 5 seconds
 
     return () => clearInterval(interval);
-  }, [timeFilter]);
+  }, [timeFilter, uid, fetchWebhooks]);
+
+  const handleGenerateUid = () => {
+    const newUid = generateUid();
+    setUid(newUid);
+    setUidInput(newUid);
+    setUidError('');
+    localStorage.setItem('webhook-uid', newUid);
+    fetchWebhooks(timeFilter, newUid);
+  };
+
+  const handleSetUid = () => {
+    const trimmedUid = uidInput.trim();
+    if (!trimmedUid) {
+      setUidError('UID 不能为空');
+      return;
+    }
+    if (!isValidUid(trimmedUid)) {
+      setUidError('UID 必须是 8-14 个字符，只能包含字母和数字');
+      return;
+    }
+    setUid(trimmedUid);
+    setUidError('');
+    localStorage.setItem('webhook-uid', trimmedUid);
+    fetchWebhooks(timeFilter, trimmedUid);
+  };
+
+  const handleClearUid = () => {
+    setUid('');
+    setUidInput('');
+    setUidError('');
+    localStorage.removeItem('webhook-uid');
+    fetchWebhooks(timeFilter, '');
+  };
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleString('zh-CN', {
@@ -63,17 +129,76 @@ export default function Home() {
     }
   };
 
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h1 className="text-3xl font-bold text-gray-800 mb-4">Webhook 日志系统</h1>
           
-          <div className="mb-4">
-            <p className="text-gray-600 mb-2">Webhook 接收地址:</p>
-            <code className="bg-gray-100 px-3 py-2 rounded block text-sm">
-              {typeof window !== 'undefined' ? `${window.location.origin}/api/webhook` : '/api/webhook'}
-            </code>
+          {/* UID Section */}
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="text-lg font-semibold text-gray-800 mb-3">您的 UID</h3>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={uidInput}
+                onChange={(e) => setUidInput(e.target.value)}
+                placeholder="输入 UID (8-14 字符，字母数字)"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                maxLength={14}
+              />
+              <button
+                onClick={handleSetUid}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                设置 UID
+              </button>
+              <button
+                onClick={handleGenerateUid}
+                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+              >
+                随机生成
+              </button>
+              {uid && (
+                <button
+                  onClick={handleClearUid}
+                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+                >
+                  清除
+                </button>
+              )}
+            </div>
+            {uidError && (
+              <p className="text-red-600 text-sm mt-1">{uidError}</p>
+            )}
+            {uid && (
+              <div className="mt-3">
+                <p className="text-sm text-gray-600 mb-2">当前 UID: <span className="font-mono font-bold text-blue-600">{uid}</span></p>
+                <p className="text-sm text-gray-600">您的 Webhook 接收地址:</p>
+                <div className="flex gap-2 items-center mt-1">
+                  <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm break-all">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/api/webhook/${uid}` : `/api/webhook/${uid}`}
+                  </code>
+                  <button
+                    onClick={() => typeof window !== 'undefined' && copyToClipboard(`${window.location.origin}/api/webhook/${uid}`)}
+                    className="px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
+                  >
+                    复制
+                  </button>
+                </div>
+              </div>
+            )}
+            {!uid && (
+              <p className="text-sm text-gray-600 mt-2">设置或生成 UID 后，您将获得专属的 Webhook 接收地址</p>
+            )}
           </div>
 
           <div className="flex gap-2">
@@ -125,11 +250,13 @@ export default function Home() {
           <>
             <div className="bg-white rounded-lg shadow-md p-6 mb-6">
               <h2 className="text-xl font-semibold mb-4">
-                日志记录 ({webhooks.length} 条)
+                日志记录 ({webhooks.length} 条) {uid && <span className="text-sm text-gray-500">- UID: {uid}</span>}
               </h2>
               
               {webhooks.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">暂无日志记录</p>
+                <p className="text-gray-500 text-center py-8">
+                  {uid ? '该 UID 暂无日志记录' : '暂无日志记录'}
+                </p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
@@ -217,6 +344,7 @@ export default function Home() {
                   <div>
                     <h4 className="font-semibold text-gray-700 mb-2">基本信息</h4>
                     <div className="bg-gray-50 p-4 rounded">
+                      <p><span className="font-medium">UID:</span> {selectedWebhook.uid}</p>
                       <p><span className="font-medium">时间:</span> {formatDate(selectedWebhook.created_at)}</p>
                       <p><span className="font-medium">方法:</span> {selectedWebhook.method}</p>
                       <p><span className="font-medium">IP:</span> {selectedWebhook.ip}</p>

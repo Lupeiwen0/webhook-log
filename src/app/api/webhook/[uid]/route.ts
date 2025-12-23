@@ -1,8 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { insertWebhook, deleteOldWebhooks } from '@/lib/db';
 
-async function handleWebhook(request: NextRequest) {
+// Validate UID: 8-14 characters, alphanumeric only
+function isValidUid(uid: string): boolean {
+  return /^[a-zA-Z0-9]{8,14}$/.test(uid);
+}
+
+async function handleWebhook(request: NextRequest, context: { params: Promise<{ uid: string }> }) {
   try {
+    const params = await context.params;
+    const uid = params.uid;
+
+    // Validate UID
+    if (!isValidUid(uid)) {
+      return NextResponse.json({ 
+        success: false, 
+        message: 'Invalid UID. UID must be 8-14 alphanumeric characters.' 
+      }, { status: 400 });
+    }
+
     // Clean up old webhooks (older than 24 hours)
     deleteOldWebhooks();
 
@@ -35,6 +51,7 @@ async function handleWebhook(request: NextRequest) {
     }
 
     const id = insertWebhook({
+      uid,
       method,
       url,
       headers,
@@ -46,7 +63,8 @@ async function handleWebhook(request: NextRequest) {
     return NextResponse.json({ 
       success: true, 
       message: 'Webhook received',
-      id 
+      id,
+      uid
     }, { status: 200 });
   } catch (error) {
     console.error('Error processing webhook:', error);
@@ -57,22 +75,22 @@ async function handleWebhook(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
-  return handleWebhook(request);
+export async function GET(request: NextRequest, context: { params: Promise<{ uid: string }> }) {
+  return handleWebhook(request, context);
 }
 
-export async function POST(request: NextRequest) {
-  return handleWebhook(request);
+export async function POST(request: NextRequest, context: { params: Promise<{ uid: string }> }) {
+  return handleWebhook(request, context);
 }
 
-export async function PUT(request: NextRequest) {
-  return handleWebhook(request);
+export async function PUT(request: NextRequest, context: { params: Promise<{ uid: string }> }) {
+  return handleWebhook(request, context);
 }
 
-export async function DELETE(request: NextRequest) {
-  return handleWebhook(request);
+export async function DELETE(request: NextRequest, context: { params: Promise<{ uid: string }> }) {
+  return handleWebhook(request, context);
 }
 
-export async function PATCH(request: NextRequest) {
-  return handleWebhook(request);
+export async function PATCH(request: NextRequest, context: { params: Promise<{ uid: string }> }) {
+  return handleWebhook(request, context);
 }

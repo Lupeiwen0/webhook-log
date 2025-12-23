@@ -16,6 +16,7 @@ const db = new Database(dbPath);
 db.exec(`
   CREATE TABLE IF NOT EXISTS webhooks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uid TEXT NOT NULL,
     method TEXT NOT NULL,
     url TEXT NOT NULL,
     headers TEXT NOT NULL,
@@ -31,8 +32,14 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_created_at ON webhooks(created_at)
 `);
 
+// Create index on uid for faster queries
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_uid ON webhooks(uid)
+`);
+
 export interface WebhookLog {
   id: number;
+  uid: string;
   method: string;
   url: string;
   headers: string;
@@ -43,6 +50,7 @@ export interface WebhookLog {
 }
 
 export function insertWebhook(data: {
+  uid: string;
   method: string;
   url: string;
   headers: string;
@@ -51,11 +59,12 @@ export function insertWebhook(data: {
   ip?: string;
 }): number {
   const stmt = db.prepare(`
-    INSERT INTO webhooks (method, url, headers, body, query, ip, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO webhooks (uid, method, url, headers, body, query, ip, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
   
   const result = stmt.run(
+    data.uid,
     data.method,
     data.url,
     data.headers,
@@ -68,15 +77,24 @@ export function insertWebhook(data: {
   return result.lastInsertRowid as number;
 }
 
-export function getWebhooks(minutesAgo: number): WebhookLog[] {
+export function getWebhooks(minutesAgo: number, uid?: string): WebhookLog[] {
   const timestamp = Date.now() - (minutesAgo * 60 * 1000);
-  const stmt = db.prepare(`
-    SELECT * FROM webhooks 
-    WHERE created_at >= ? 
-    ORDER BY created_at DESC
-  `);
   
-  return stmt.all(timestamp) as WebhookLog[];
+  if (uid) {
+    const stmt = db.prepare(`
+      SELECT * FROM webhooks 
+      WHERE created_at >= ? AND uid = ?
+      ORDER BY created_at DESC
+    `);
+    return stmt.all(timestamp, uid) as WebhookLog[];
+  } else {
+    const stmt = db.prepare(`
+      SELECT * FROM webhooks 
+      WHERE created_at >= ? 
+      ORDER BY created_at DESC
+    `);
+    return stmt.all(timestamp) as WebhookLog[];
+  }
 }
 
 export function deleteOldWebhooks(): number {
