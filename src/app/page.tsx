@@ -49,12 +49,18 @@ export default function Home() {
   }, []);
 
   const fetchWebhooks = useCallback(async (minutes: number, currentUid?: string) => {
+    const uidParam = currentUid !== undefined ? currentUid : uid;
+    
+    // Require UID to fetch logs
+    if (!uidParam) {
+      setWebhooks([]);
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     try {
-      const uidParam = currentUid !== undefined ? currentUid : uid;
-      const url = uidParam 
-        ? `/api/logs?minutes=${minutes}&uid=${uidParam}`
-        : `/api/logs?minutes=${minutes}`;
+      const url = `/api/logs?minutes=${minutes}&uid=${uidParam}`;
       const response = await fetch(url);
       const data = await response.json();
       if (data.success) {
@@ -68,6 +74,12 @@ export default function Home() {
   }, [uid]);
 
   useEffect(() => {
+    // Only fetch and auto-refresh when UID is set
+    if (!uid) {
+      setLoading(false);
+      return;
+    }
+    
     fetchWebhooks(timeFilter);
     const interval = setInterval(() => {
       fetchWebhooks(timeFilter);
@@ -105,8 +117,8 @@ export default function Home() {
     setUid('');
     setUidInput('');
     setUidError('');
+    setWebhooks([]);
     localStorage.removeItem('webhook-uid');
-    fetchWebhooks(timeFilter, '');
   };
 
   const formatDate = (timestamp: number) => {
@@ -152,7 +164,7 @@ export default function Home() {
                 value={uidInput}
                 onChange={(e) => setUidInput(e.target.value)}
                 placeholder="输入 UID (8-14 字符，字母数字)"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-[#666666]"
                 maxLength={14}
               />
               <button
@@ -255,7 +267,7 @@ export default function Home() {
               
               {webhooks.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">
-                  {uid ? '该 UID 暂无日志记录' : '暂无日志记录'}
+                  {uid ? '该 UID 暂无日志记录' : '请先设置 UID 以查看日志'}
                 </p>
               ) : (
                 <div className="overflow-x-auto">
@@ -343,7 +355,7 @@ export default function Home() {
                 <div className="space-y-4">
                   <div>
                     <h4 className="font-semibold text-gray-700 mb-2">基本信息</h4>
-                    <div className="bg-gray-50 p-4 rounded">
+                    <div className="bg-gray-50 p-4 rounded text-[#666666]">
                       <p><span className="font-medium">UID:</span> {selectedWebhook.uid}</p>
                       <p><span className="font-medium">时间:</span> {formatDate(selectedWebhook.created_at)}</p>
                       <p><span className="font-medium">方法:</span> {selectedWebhook.method}</p>
@@ -353,7 +365,7 @@ export default function Home() {
 
                   <div>
                     <h4 className="font-semibold text-gray-700 mb-2">URL</h4>
-                    <div className="bg-gray-50 p-4 rounded break-all">
+                    <div className="bg-gray-50 p-4 rounded break-all text-[#666666]">
                       {selectedWebhook.url}
                     </div>
                   </div>
@@ -361,7 +373,7 @@ export default function Home() {
                   {selectedWebhook.query && (
                     <div>
                       <h4 className="font-semibold text-gray-700 mb-2">查询参数</h4>
-                      <div className="bg-gray-50 p-4 rounded break-all">
+                      <div className="bg-gray-50 p-4 rounded break-all text-[#666666]">
                         {selectedWebhook.query}
                       </div>
                     </div>
@@ -369,7 +381,7 @@ export default function Home() {
 
                   <div>
                     <h4 className="font-semibold text-gray-700 mb-2">请求头</h4>
-                    <pre className="bg-gray-50 p-4 rounded overflow-x-auto text-sm">
+                    <pre className="bg-gray-50 p-4 rounded overflow-x-auto text-sm text-[#666666]">
                       {formatJson(selectedWebhook.headers)}
                     </pre>
                   </div>
@@ -377,7 +389,7 @@ export default function Home() {
                   {selectedWebhook.body && (
                     <div>
                       <h4 className="font-semibold text-gray-700 mb-2">请求体</h4>
-                      <pre className="bg-gray-50 p-4 rounded overflow-x-auto text-sm">
+                      <pre className="bg-gray-50 p-4 rounded overflow-x-auto text-sm text-[#666666]">
                         {formatJson(selectedWebhook.body)}
                       </pre>
                     </div>
