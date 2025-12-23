@@ -38,6 +38,7 @@ export default function Home() {
   const [uid, setUid] = useState('');
   const [uidInput, setUidInput] = useState('');
   const [uidError, setUidError] = useState('');
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   // Load UID from localStorage on mount
   useEffect(() => {
@@ -81,12 +82,18 @@ export default function Home() {
     }
     
     fetchWebhooks(timeFilter);
+    
+    // Only set up auto-refresh if enabled
+    if (!autoRefresh) {
+      return;
+    }
+    
     const interval = setInterval(() => {
       fetchWebhooks(timeFilter);
     }, 5000); // Refresh every 5 seconds
 
     return () => clearInterval(interval);
-  }, [timeFilter, uid, fetchWebhooks]);
+  }, [timeFilter, uid, autoRefresh, fetchWebhooks]);
 
   const handleGenerateUid = () => {
     const newUid = generateUid();
@@ -196,7 +203,7 @@ export default function Home() {
                 <p className="text-sm text-gray-600 mb-2">当前 UID: <span className="font-mono font-bold text-blue-600">{uid}</span></p>
                 <p className="text-sm text-gray-600">您的 Webhook 接收地址:</p>
                 <div className="flex gap-2 items-center mt-1">
-                  <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm break-all">
+                  <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm text-gray-600 break-all">
                     {typeof window !== 'undefined' ? `${window.location.origin}/api/webhook/${uid}` : `/api/webhook/${uid}`}
                   </code>
                   <button
@@ -245,8 +252,18 @@ export default function Home() {
               最近 4 小时
             </button>
             <button
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              className={`ml-auto px-4 py-2 rounded ${
+                autoRefresh
+                  ? 'bg-purple-500 text-white hover:bg-purple-600'
+                  : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+              }`}
+            >
+              {autoRefresh ? '🔄 自动刷新' : '⏸️ 已暂停'}
+            </button>
+            <button
               onClick={() => fetchWebhooks(timeFilter)}
-              className="ml-auto px-4 py-2 rounded bg-green-500 text-white hover:bg-green-600"
+              className="px-4 py-2 rounded bg-green-500 text-white hover:bg-green-600"
             >
               刷新
             </button>
